@@ -1,12 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/go-playground/webhooks/v6/github"
 	githubApi "github.com/google/go-github/v48/github"
 	"reflect"
 	"testing"
-	"time"
 )
 
 func Test_handleCreateRepositoryEvent(t *testing.T) {

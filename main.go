@@ -1,5 +1,8 @@
 package main
 
+//TODO
+// Implement a Schema with the most important fields for repo
+// Make Cherios check and create webhook to the as-code repo if needed
 import (
 	"context"
 	"encoding/json"
