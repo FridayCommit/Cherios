@@ -9,6 +9,7 @@ WORKDIR /workspace
 COPY go.mod go.mod
 COPY go.sum go.sum
 COPY cheriosapp.2022-11-19.private-key.pem cheriosapp.2022-11-19.private-key.pem
+COPY handlerGithub handlerGithub
 #I prefer running x incase stuff breaks, it just becomes verbose
 RUN go mod download -x
 # Copy the go source
