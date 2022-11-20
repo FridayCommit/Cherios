@@ -4,10 +4,13 @@ package main
 // Implement a Schema with the most important fields for repo
 // Make Cherios check and create webhook to the as-code repo if needed
 import (
+	"encoding/json"
 	"fridaycommit/cherios/handlerGithub"
 
+	"bytes"
 	"github.com/go-playground/webhooks/v6/github"
 	log "github.com/sirupsen/logrus"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -39,17 +42,11 @@ func main() {
 
 		case github.RepositoryPayload:
 			repository := payload.(github.RepositoryPayload)
-			switch repository.Action {
-
-			case "created":
-				handlerGithub.HandleCreateRepositoryEvent(repository)
-			default:
-				log.Warning("Action " + repository.Action + " is not supported")
-			}
-
-			//		log.Info(fmt.Printf("%+v", repository))
-
+			handlerGithub.HandleRepositoryEvent(repository, renameChangePayload)
+		default:
+			log.Warning("Something went wrong")
 		}
+
 	})
 	log.Info("Listening on port 3000")
 	http.ListenAndServe(":3000", nil)
