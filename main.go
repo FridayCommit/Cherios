@@ -6,6 +6,8 @@ package main
 import (
 	"encoding/json"
 	"fridaycommit/cherios/handlerGithub"
+	"fridaycommit/cherios/sonarqube"
+	"time"
 
 	"bytes"
 	"github.com/go-playground/webhooks/v6/github"
@@ -25,6 +27,8 @@ const (
 )
 
 func init() {
+	sonarqube.DoesProjectExist("devops-jeskai")
+	time.Sleep(1000)
 	handlerGithub.CreateSourceHook() //TODO check if this works
 }
 
