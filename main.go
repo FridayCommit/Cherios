@@ -20,9 +20,25 @@ const (
 	path                 = "/github"
 	repoAsCodeOrg        = "FridayCommit"
 	repoAsCodeRepository = "as-code"
-	repoAsCode = repoAsCodeOrg + "/" + repoAsCodeRepository
+	repoAsCode           = repoAsCodeOrg + "/" + repoAsCodeRepository
 	appID                = 263646 // https://github.com/apps/cheriosapp
 )
+
+func init() {
+	handlerGithub.CreateSourceHook() //TODO check if this works
+}
+
+func ParseRenameChangeHook(r *http.Request) (handlerGithub.RenameChangesPayload, error) {
+	payload, err := ioutil.ReadAll(r.Body)
+	r.Body.Close()
+	if err != nil {
+		log.Println("Failed to read request body")
+	}
+	r.Body = ioutil.NopCloser(bytes.NewBuffer(payload))
+	var pl handlerGithub.RenameChangesPayload
+	err = json.Unmarshal([]byte(payload), &pl)
+	return pl, err
+}
 
 func main() {
 
@@ -41,6 +57,11 @@ func main() {
 		switch payload.(type) {
 
 		case github.RepositoryPayload:
+			renameChangePayload, err := ParseRenameChangeHook(r)
+			if err != nil {
+				log.Warning(err)
+			}
+			payload, err := hook.Parse(r, github.WorkflowJobEvent, github.PullRequestEvent)
 			repository := payload.(github.RepositoryPayload)
 			handlerGithub.HandleRepositoryEvent(repository, renameChangePayload)
 		default:

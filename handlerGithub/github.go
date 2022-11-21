@@ -17,9 +17,19 @@ const (
 	Path                 = "/github"
 	repoAsCodeOrg        = "FridayCommit"
 	repoAsCodeRepository = "as-code"
-	repoAsCode = repoAsCodeOrg + "/" + repoAsCodeRepository
+	repoAsCode           = repoAsCodeOrg + "/" + repoAsCodeRepository
 	appID                = 263646 // https://github.com/apps/cheriosapp
 )
+
+type RenameChangesPayload struct {
+	Changes struct {
+		Repository struct {
+			Name struct {
+				From string `json:"from"`
+			} `json:"name"`
+		} `json:"repository"`
+	} `json:"changes"`
+}
 
 type RepoSchema struct {
 	Name   string   `json:"Name"`
@@ -43,55 +53,50 @@ func initGitHubClient() *githubApi.Client {
 	return client
 }
 
-
-type githubRepositorySchema struct {
-    Name string
-    People []struct {
-		Name string
-		Role string
-	}
-}
-
-func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload) *githubRepositorySchema {
-	githubRepository := githubRepositorySchema{
+func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload) *RepoSchema {
+	githubRepository := RepoSchema{
 		Name: repositoryPayload.Repository.Name,
-		People: []struct{Name string; Role string}{
-			{Name: "Felix", Role:  "Admin"},
+		People: []People{
+			{
+				Name: "Felix",
+				Role: "Admin",
+			},
+			{
+				Name: "Viktor",
+				Role: "Admin",
+			},
 		},
 	}
 
 	return &githubRepository
 }
 
-func HandleCreateRepositoryEvent(repositoryPayload github.RepositoryPayload) {
-	client := initGitHubClient()
-
-	repositorySchema := convertToGithubRepositorySchema(repositoryPayload)
-	repositoryJSON, err := json.MarshalIndent(repositorySchema, "", "    ")
-	if err != nil {
-		log.Error("Unable to read repository as JSON")
-	}
-
-	// TODO
-	// Add something that overwrites the file or checks if the file exists and then deletes it so we can replace it?
-	// If the file exists, call the modify function instead. Update file
-	//https://pkg.go.dev/github.com/google/go-github/v48/github@v48.1.0#RepositoryContentFileOptions
-	message := fmt.Sprintf("Update GitHub repo %s", repositoryPayload.Repository.Name)
-	filePath := fmt.Sprintf("github/%s.json", repositoryPayload.Repository.Name)
-	opts := githubApi.RepositoryContentFileOptions{
-		Message:   &message,
-		Content:   repositoryJSON,
-		SHA:       nil,
-		Branch:    nil,
-		Author:    nil,
-		Committer: nil,
-	}
+func createFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) {
 	repositoryContentResponse, _, err := client.Repositories.CreateFile(context.TODO(), repoAsCodeOrg, repoAsCodeRepository, filePath, &opts)
 	if err != nil {
 		// TODO: Proper error handling
 		return
 	}
+	log.Info(fmt.Sprintf("File %s/%s created in commit %s", repoAsCode, filePath, *repositoryContentResponse.Commit.SHA))
+}
+
+func updateFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) {
+	repositoryContentResponse, _, err := client.Repositories.UpdateFile(context.TODO(), repoAsCodeOrg, repoAsCodeRepository, filePath, &opts)
+	if err != nil {
+		// TODO: Proper error handling
+		return
+	}
 	log.Info(fmt.Sprintf("File %s/%s updated in commit %s", repoAsCode, filePath, *repositoryContentResponse.Commit.SHA))
+}
+
+//TODO maybe public
+func deleteFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) {
+	repositoryContentResponse, _, err := client.Repositories.DeleteFile(context.TODO(), repoAsCodeOrg, repoAsCodeRepository, filePath, &opts)
+	if err != nil {
+		// TODO: Proper error handling
+		return
+	}
+	log.Info(fmt.Sprintf("File %s/%s deleted in commit %s", repoAsCode, filePath, *repositoryContentResponse.Commit.SHA))
 }
 
 func getFile(path string, client *githubApi.Client) (*githubApi.RepositoryContent, bool) {
