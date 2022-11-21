@@ -1,6 +1,7 @@
 package sonarqube
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/joho/godotenv"
@@ -27,6 +28,14 @@ type projectResp struct {
 		Qualifier string `json:"qualifier"`
 		Project   string `json:"project"`
 	} `json:"components"`
+}
+type createResp struct {
+	Project struct {
+		Key        string `json:"key"`
+		Name       string `json:"name"`
+		Qualifier  string `json:"qualifier"`
+		Visibility string `json:"visibility"`
+	} `json:"project"`
 }
 
 // Checks if the project already exists in sonarqube
@@ -61,4 +70,34 @@ func DoesProjectExist(repoName string) bool {
 		}
 	}
 	return true
+}
+
+func createProject(reponame string) {
+	err := godotenv.Load("sonar.env") // This env file needs to be in root. we will remove this during prod its just for good development
+	mytoken := os.Getenv("sonartoken")
+	client := &http.Client{
+		Transport:     nil,
+		CheckRedirect: nil,
+		Jar:           nil,
+		Timeout:       0,
+	}
+	postBody, _ := json.Marshal(map[string]string{ // this could be inplace i guess
+		"name":    reponame,
+		"project": reponame,
+	})
+	//	responseBody := bytes.NewBuffer(postBody)
+	reqstr := SonarUrl + "/api/projects/create" // add these to some kind of types library i guess ?
+	req, err := http.NewRequest(http.MethodPost, reqstr, bytes.NewBuffer(postBody))
+	req.SetBasicAuth(mytoken, "") // Leave the password empty, sonarQube is stupid like that
+	resp, err := client.Do(req)
+	if err != nil {
+		//todo
+	}
+	defer resp.Body.Close()
+	var result createResp
+	body, err := io.ReadAll(resp.Body)                    // response body is []byte
+	if err := json.Unmarshal(body, &result); err != nil { // Parse []byte to go struct pointer
+		fmt.Println("Can not unmarshal JSON")
+	}
+	fmt.Println(result)
 }
