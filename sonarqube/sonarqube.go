@@ -1,14 +1,16 @@
 package sonarqube
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/go-playground/webhooks/v6/github"
 	"github.com/joho/godotenv"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 )
 
 const (
@@ -68,7 +70,30 @@ func sonarqubeCall(method string, requeststr string, body io.Reader) (*http.Resp
 	if err != nil {
 		//todo
 	}
-	defer resp.Body.Close()
+	return resp, nil
+}
+func sonarqubeCallPost(method string, requeststr string, form url.Values) (*http.Response, error) {
+	err := godotenv.Load("sonar.env") // This env file needs to be in root. we will remove this during prod its just for good development
+	if err != nil {
+		//TODO
+	}
+	mytoken := os.Getenv("sonartoken")
+	client := &http.Client{
+		Transport:     nil,
+		CheckRedirect: nil,
+		Jar:           nil,
+		Timeout:       0,
+	}
+	req, err := http.NewRequest(method, requeststr, strings.NewReader(form.Encode()))
+	req.SetBasicAuth(mytoken, "")
+	if method == http.MethodGet {
+		req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	}
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := client.Do(req)
+	if err != nil {
+		//todo
+	}
 	return resp, nil
 }
 
@@ -86,17 +111,17 @@ func DoesProjectExist(repositoryPayload github.RepositoryPayload) bool {
 	// The sonarqube API searches partially. So if someone would name their repo devops-app then devops-applications would also show up.
 	for _, component := range result.Components {
 		if component.Name == repositoryPayload.Repository.Name || component.Key == repositoryPayload.Repository.Name || component.Project == repositoryPayload.Repository.Name { // Catches also some edge cases with weird formatting of names. refactor maybe ?
-			return false
+			return true
 		}
 	}
-	return true
+	defer resp.Body.Close()
+	return false
 }
 func createProject(repositoryPayload github.RepositoryPayload) { // Maybe we should send the repo object instead because other functions might need to know branch etc.
-	postBody, _ := json.Marshal(map[string]string{ // this could be inplace i guess
-		"name":    repositoryPayload.Repository.Name,
-		"project": repositoryPayload.Repository.Name,
-	})
-	resp, err := sonarqubeCall(http.MethodPost, SonarUrl+apiCreate, bytes.NewBuffer(postBody))
+	form := url.Values{}
+	form.Add("name", repositoryPayload.Repository.Name)
+	form.Add("project", repositoryPayload.Repository.Name)
+	resp, err := sonarqubeCallPost(http.MethodPost, SonarUrl+apiCreate, form)
 	if err != nil {
 		// TODO
 	}
@@ -105,39 +130,53 @@ func createProject(repositoryPayload github.RepositoryPayload) { // Maybe we sho
 	if err := json.Unmarshal(body, &result); err != nil { // Parse []byte to go struct pointer
 		fmt.Println("Can not unmarshal JSON")
 	}
-	fmt.Println(result)
+	if resp.StatusCode > 299 {
+		log.Warning(resp.StatusCode)
+	}
+	defer resp.Body.Close()
 }
 func setDefaultBranch(repositoryPayload github.RepositoryPayload) {
-	postBody, _ := json.Marshal(map[string]string{ // this could be inplace i guess
-		"name":    repositoryPayload.Repository.DefaultBranch,
-		"project": repositoryPayload.Repository.Name,
-	})
-	resp, err := sonarqubeCall(http.MethodPost, SonarUrl+apiRenameBranch, bytes.NewBuffer(postBody))
+	//	postBody, _ := json.Marshal(map[string]string{ // this could be inplace i guess
+	//		"name":    repositoryPayload.Repository.DefaultBranch,
+	//		"project": repositoryPayload.Repository.Name,
+	//	})
+	form := url.Values{}
+	form.Add("name", repositoryPayload.Repository.DefaultBranch)
+	form.Add("project", repositoryPayload.Repository.Name)
+	resp, err := sonarqubeCallPost(http.MethodPost, SonarUrl+apiRenameBranch, form)
 	if err != nil {
 		//TODO
 	}
 	if resp.StatusCode > 299 {
-		//todo
+		log.Warning(resp.StatusCode)
 	}
+	defer resp.Body.Close()
 }
 func setGitHubBinding(repositoryPayload github.RepositoryPayload) {
-	postBody, _ := json.Marshal(map[string]string{ // this could be inplace i guess
-		"almSetting": "GitHub",
-		"project":    repositoryPayload.Repository.Name,
-		"monorepo":   "no",
-		"repository": repositoryPayload.Repository.FullName, //Needs to be Org/RepoName
-	})
-	resp, err := sonarqubeCall(http.MethodPost, SonarUrl+apiSetGitHubBinding, bytes.NewBuffer(postBody))
+	//	postBody, _ := json.Marshal(map[string]string{ // this could be inplace i guess
+	//		"almSetting": "GitHub",
+	//		"project":    repositoryPayload.Repository.Name,
+	//		"monorepo":   "no",
+	//		"repository": repositoryPayload.Repository.FullName, //Needs to be Org/RepoName
+	//	})
+	form := url.Values{}
+	form.Add("almSetting", "GitHub")
+	form.Add("project", repositoryPayload.Repository.Name)
+	form.Add("monorepo", "no")
+	form.Add("repository", repositoryPayload.Repository.FullName)
+	resp, err := sonarqubeCallPost(http.MethodPost, SonarUrl+apiSetGitHubBinding, form)
 	if err != nil {
 		// TODO
 	}
 	if resp.StatusCode > 299 {
-		//todo
+		log.Warning(resp.StatusCode)
 	}
+	defer resp.Body.Close()
 }
 func OnboardSonarQube(repositoryPayload github.RepositoryPayload) {
 	if DoesProjectExist(repositoryPayload) {
-		//todo stop onboarding
+		log.Warning("Project " + repositoryPayload.Repository.Name + " Already exists")
+		return
 	}
 	createProject(repositoryPayload)
 	setGitHubBinding(repositoryPayload)

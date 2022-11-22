@@ -12,6 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 const ( // Move some of these to Inputs instead they shouldnt be Constants. except maybe the webhook path ?
@@ -23,6 +24,12 @@ const ( // Move some of these to Inputs instead they shouldnt be Constants. exce
 )
 
 func init() {
+	test := github.RepositoryPayload{}
+	test.Repository.Name = "devops-jeskai"
+	test.Repository.DefaultBranch = "main"
+	test.Repository.FullName = "SnowSoftwareGlobal/devops-jeskai"
+	sonarqube.OnboardSonarQube(test)
+	time.Sleep(1000)
 	handlerGithub.CreateSourceHook()
 }
 
