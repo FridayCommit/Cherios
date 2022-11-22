@@ -4,21 +4,17 @@ package main
 // Implement a Schema with the most important fields for repo
 // Make Cherios check and create webhook to the as-code repo if needed
 import (
+	"bytes"
 	"encoding/json"
 	"fridaycommit/cherios/handlerGithub"
 	"fridaycommit/cherios/sonarqube"
-	"time"
-
-	"bytes"
 	"github.com/go-playground/webhooks/v6/github"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
 )
 
-var appKey string
-
-const (
+const ( // Move some of these to Inputs instead they shouldnt be Constants. except maybe the webhook path ?
 	path                 = "/github"
 	repoAsCodeOrg        = "FridayCommit"
 	repoAsCodeRepository = "as-code"
@@ -27,9 +23,7 @@ const (
 )
 
 func init() {
-	sonarqube.DoesProjectExist("devops-jeskai")
-	time.Sleep(1000)
-	handlerGithub.CreateSourceHook() //TODO check if this works
+	handlerGithub.CreateSourceHook()
 }
 
 func ParseRenameChangeHook(r *http.Request) (handlerGithub.RenameChangesPayload, error) {
@@ -68,6 +62,7 @@ func main() {
 			payload, err := hook.Parse(r, github.WorkflowJobEvent, github.PullRequestEvent)
 			repository := payload.(github.RepositoryPayload)
 			handlerGithub.HandleRepositoryEvent(repository, renameChangePayload)
+			sonarqube.OnboardSonarQube(repository)
 		default:
 			log.Warning("Something went wrong")
 		}
