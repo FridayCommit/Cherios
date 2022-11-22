@@ -143,3 +143,6 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) {
 	setGitHubBinding(repositoryPayload)
 	setDefaultBranch(repositoryPayload)
 }
+
+//TODO add function that adds the sonar-projects.properties file back to the repo we just onboarded
+//https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/ -> Configuring your project

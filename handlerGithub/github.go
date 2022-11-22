@@ -11,8 +11,6 @@ import (
 	"net/http"
 )
 
-var appKey string
-
 const (
 	Path                 = "/github"
 	repoAsCodeOrg        = "FridayCommit"
@@ -89,7 +87,7 @@ func updateFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOp
 	log.Info(fmt.Sprintf("File %s/%s updated in commit %s", repoAsCode, filePath, *repositoryContentResponse.Commit.SHA))
 }
 
-//TODO maybe public
+// TODO maybe public
 func deleteFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) {
 	repositoryContentResponse, _, err := client.Repositories.DeleteFile(context.TODO(), repoAsCodeOrg, repoAsCodeRepository, filePath, &opts)
 	if err != nil {
@@ -165,14 +163,7 @@ func HandleRepositoryEvent(repositoryPayload github.RepositoryPayload, renameCha
 
 }
 
-/*
-Obmaa
-obama2
-
-
-*/
-
-// Creates a hook to the source of truth repo so that we can see changes to files. Can be ran on init
+// CreateSourceHook Creates a hook to the source of truth repo so that we can see changes to files. Can be ran on init
 func CreateSourceHook() {
 	//	var interfaceVal interface{}
 	//	json.Unmarshal(j, &interfaceVal)
