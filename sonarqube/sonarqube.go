@@ -49,30 +49,7 @@ type createResp struct {
 	} `json:"project"`
 }
 
-func sonarqubeCall(method string, requeststr string, body io.Reader) (*http.Response, error) {
-	err := godotenv.Load("sonar.env") // This env file needs to be in root. we will remove this during prod its just for good development
-	if err != nil {
-		//TODO
-	}
-	mytoken := os.Getenv("sonartoken")
-	client := &http.Client{
-		Transport:     nil,
-		CheckRedirect: nil,
-		Jar:           nil,
-		Timeout:       0,
-	}
-	req, err := http.NewRequest(method, requeststr, body)
-	req.SetBasicAuth(mytoken, "")
-	if method == http.MethodGet {
-		req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		//todo
-	}
-	return resp, nil
-}
-func sonarqubeCallPost(method string, requeststr string, form url.Values) (*http.Response, error) {
+func sonarqubeCall(method string, requeststr string, form url.Values, contentType string) (*http.Response, error) {
 	err := godotenv.Load("sonar.env") // This env file needs to be in root. we will remove this during prod its just for good development
 	if err != nil {
 		//TODO
@@ -86,10 +63,9 @@ func sonarqubeCallPost(method string, requeststr string, form url.Values) (*http
 	}
 	req, err := http.NewRequest(method, requeststr, strings.NewReader(form.Encode()))
 	req.SetBasicAuth(mytoken, "")
-	if method == http.MethodGet {
-		req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	if contentType != "" {
+		req.Header.Add("Content-Type", contentType)
 	}
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := client.Do(req)
 	if err != nil {
 		//todo
@@ -99,7 +75,7 @@ func sonarqubeCallPost(method string, requeststr string, form url.Values) (*http
 
 // DoesProjectExist Checks if the project already exists in sonarqube
 func DoesProjectExist(repositoryPayload github.RepositoryPayload) bool {
-	resp, err := sonarqubeCall(http.MethodGet, SonarUrl+apiSearch+repositoryPayload.Repository.Name, nil)
+	resp, err := sonarqubeCall(http.MethodGet, SonarUrl+apiSearch+repositoryPayload.Repository.Name, nil, "application/json; charset=UTF-8")
 	if err != nil {
 		// TODO
 	}
@@ -121,7 +97,7 @@ func createProject(repositoryPayload github.RepositoryPayload) { // Maybe we sho
 	form := url.Values{}
 	form.Add("name", repositoryPayload.Repository.Name)
 	form.Add("project", repositoryPayload.Repository.Name)
-	resp, err := sonarqubeCallPost(http.MethodPost, SonarUrl+apiCreate, form)
+	resp, err := sonarqubeCall(http.MethodPost, SonarUrl+apiCreate, form, "application/x-www-form-urlencoded")
 	if err != nil {
 		// TODO
 	}
@@ -143,7 +119,7 @@ func setDefaultBranch(repositoryPayload github.RepositoryPayload) {
 	form := url.Values{}
 	form.Add("name", repositoryPayload.Repository.DefaultBranch)
 	form.Add("project", repositoryPayload.Repository.Name)
-	resp, err := sonarqubeCallPost(http.MethodPost, SonarUrl+apiRenameBranch, form)
+	resp, err := sonarqubeCall(http.MethodPost, SonarUrl+apiRenameBranch, form, "application/x-www-form-urlencoded")
 	if err != nil {
 		//TODO
 	}
@@ -164,7 +140,7 @@ func setGitHubBinding(repositoryPayload github.RepositoryPayload) {
 	form.Add("project", repositoryPayload.Repository.Name)
 	form.Add("monorepo", "no")
 	form.Add("repository", repositoryPayload.Repository.FullName)
-	resp, err := sonarqubeCallPost(http.MethodPost, SonarUrl+apiSetGitHubBinding, form)
+	resp, err := sonarqubeCall(http.MethodPost, SonarUrl+apiSetGitHubBinding, form, "application/x-www-form-urlencoded")
 	if err != nil {
 		// TODO
 	}
@@ -183,5 +159,5 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) {
 	setDefaultBranch(repositoryPayload)
 }
 
-//TODO add function that adds the sonar-projects.properties file back to the repo we just onboarded
+//TODO add function that adds the sonar-projects.properties file back to the repo we just onboarded. I think this belongs in the github library
 //https://docs.sonarqube.org/latest/analysis/scan/sonarscanner/ -> Configuring your project
