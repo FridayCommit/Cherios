@@ -3,6 +3,7 @@ package sonarqube
 import (
 	"encoding/json"
 	"fmt"
+	"fridaycommit/cherios/handlerGithub"
 	"github.com/go-playground/webhooks/v6/github"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
@@ -129,12 +130,6 @@ func setDefaultBranch(repositoryPayload github.RepositoryPayload) {
 	defer resp.Body.Close()
 }
 func setGitHubBinding(repositoryPayload github.RepositoryPayload) {
-	//	postBody, _ := json.Marshal(map[string]string{ // this could be inplace i guess
-	//		"almSetting": "GitHub",
-	//		"project":    repositoryPayload.Repository.Name,
-	//		"monorepo":   "no",
-	//		"repository": repositoryPayload.Repository.FullName, //Needs to be Org/RepoName
-	//	})
 	form := url.Values{}
 	form.Add("almSetting", "GitHub")
 	form.Add("project", repositoryPayload.Repository.Name)
@@ -157,6 +152,7 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) {
 	createProject(repositoryPayload)
 	setGitHubBinding(repositoryPayload)
 	setDefaultBranch(repositoryPayload)
+	handlerGithub.CreateSonarQubeFile(repositoryPayload)
 }
 
 //TODO add function that adds the sonar-projects.properties file back to the repo we just onboarded. I think this belongs in the github library

@@ -199,3 +199,29 @@ func CreateSourceHook() {
 	log.Info(fmt.Sprintf("Hook %s created for %s"), hook.Name, repoAsCode)
 
 }
+
+func CreateSonarQubeFile(repositoryPayload github.RepositoryPayload) {
+	client := initGitHubClient()
+	filePath := "sonar-project.properties"
+	message := "Added sonar-project.properties file"
+	fileContent, _ := getFile(filePath, client)
+	var sha *string = nil
+	if fileContent != nil {
+		sha = fileContent.SHA
+	}
+	opts := githubApi.RepositoryContentFileOptions{
+		Message:   &message,
+		Content:   []byte("sonar.projectKey=" + repositoryPayload.Repository.Name),
+		SHA:       sha,
+		Branch:    nil,
+		Author:    nil,
+		Committer: nil,
+	}
+	repositoryContentResponse, _, err := client.Repositories.CreateFile(context.TODO(), repositoryPayload.Organization.Login, repositoryPayload.Repository.Name, filePath, &opts)
+	if err != nil {
+		// TODO: Proper error handling
+		return
+	}
+	log.Info(fmt.Sprintf("File %s/%s created in commit %s", repositoryPayload.Repository.FullName, filePath, *repositoryContentResponse.Commit.SHA))
+
+}
