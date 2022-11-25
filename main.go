@@ -28,6 +28,7 @@ func init() {
 	test.Repository.Name = "devops-jeskai"
 	test.Repository.DefaultBranch = "main"
 	test.Repository.FullName = "SnowSoftwareGlobal/devops-jeskai"
+	sonarqube.SearchSonarQube(sonarqube.ProjectQualifier, test.Repository.Name)
 	sonarqube.OnboardSonarQube(test)
 	time.Sleep(1000)
 	handlerGithub.CreateSourceHook()
