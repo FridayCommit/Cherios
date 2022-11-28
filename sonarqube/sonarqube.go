@@ -3,6 +3,7 @@ package sonarqube
 import (
 	"encoding/json"
 	"fmt"
+	"fridaycommit/cherios/handlerGithub"
 	"github.com/go-playground/webhooks/v6/github"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
@@ -89,7 +90,7 @@ func SearchSonarQube(qualifier string, search string) (bool, error) {
 	values.Add("q", search)
 	apiUrl.RawQuery = values.Encode()
 	resp, err := sonarqubeCall(http.MethodGet, SonarUrl+apiUrl.String(), nil, "application/json; charset=UTF-8")
-	defer resp.Body.Close()
+	defer resp.Body.Close() //TODO wrap all of these in error handling :O
 	if err != nil {
 		return false, err
 	}
@@ -223,7 +224,7 @@ func setGitHubBinding(repositoryPayload github.RepositoryPayload) error {
 }
 
 // OnboardSonarQube bootstraps the SonarQube Plugin
-func OnboardSonarQube(repositoryPayload github.RepositoryPayload) { //TODO handle the error from here probably
+func OnboardSonarQube(repositoryPayload github.RepositoryPayload) { //TODO handle the error from here probably and we might wanna return the created project and some info maybe?
 	search, err := SearchSonarQube(ProjectQualifier, repositoryPayload.Repository.Name)
 	if err != nil {
 		log.Error(err)
@@ -248,7 +249,7 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) { //TODO handl
 		log.Error(err)
 		return
 	}
-	search, err = SearchSonarQube(PortfolioQualifier, "devops")
+	search, err = SearchSonarQube(PortfolioQualifier, "devops") //TODO the parameters might need to be supplied in some other way as topics arent given at "birth"
 	if err != nil {
 		log.Error(err)
 		return
@@ -256,8 +257,12 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) { //TODO handl
 	if !search {
 		createPortfolio("devops")
 	}
-	addToPortfolio("devops", repositoryPayload.Repository.Name)
-	//	handlerGithub.CreateSonarQubeFile(repositoryPayload)
+	err = addToPortfolio("devops", repositoryPayload.Repository.Name)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	handlerGithub.CreateSonarQubeFile(repositoryPayload) // TODO add error handling for this function?
 }
 
 //TODO add function that adds the sonar-projects.properties file back to the repo we just onboarded. I think this belongs in the github library

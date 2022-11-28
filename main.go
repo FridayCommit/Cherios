@@ -10,9 +10,8 @@ import (
 	"fridaycommit/cherios/sonarqube"
 	"github.com/go-playground/webhooks/v6/github"
 	log "github.com/sirupsen/logrus"
-	"io/ioutil"
+	"io"
 	"net/http"
-	"time"
 )
 
 const ( // Move some of these to Inputs instead they shouldnt be Constants. except maybe the webhook path ?
@@ -24,23 +23,17 @@ const ( // Move some of these to Inputs instead they shouldnt be Constants. exce
 )
 
 func init() {
-	test := github.RepositoryPayload{}
-	test.Repository.Name = "devops-jeskai"
-	test.Repository.DefaultBranch = "main"
-	test.Repository.FullName = "SnowSoftwareGlobal/devops-jeskai"
-	sonarqube.SearchSonarQube(sonarqube.ProjectQualifier, test.Repository.Name)
-	sonarqube.OnboardSonarQube(test)
-	time.Sleep(1000)
+	// Bootstrap
 	handlerGithub.CreateSourceHook()
 }
 
 func ParseRenameChangeHook(r *http.Request) (handlerGithub.RenameChangesPayload, error) {
-	payload, err := ioutil.ReadAll(r.Body)
+	payload, err := io.ReadAll(r.Body)
 	r.Body.Close()
 	if err != nil {
 		log.Println("Failed to read request body")
 	}
-	r.Body = ioutil.NopCloser(bytes.NewBuffer(payload))
+	r.Body = io.NopCloser(bytes.NewBuffer(payload))
 	var pl handlerGithub.RenameChangesPayload
 	err = json.Unmarshal([]byte(payload), &pl)
 	return pl, err
