@@ -16,10 +16,9 @@ import (
 
 const ( // Move some of these to Inputs instead they shouldnt be Constants. except maybe the webhook path ?
 	path                 = "/github"
-	repoAsCodeOrg        = "FridayCommit"
-	repoAsCodeRepository = "as-code"
-	repoAsCode           = repoAsCodeOrg + "/" + repoAsCodeRepository
-	appID                = 263646 // https://github.com/apps/cheriosapp
+	repoAsCodeOrg        = "FridayCommit" // Set as ENV
+	repoAsCodeRepository = "as-code"      // Set as ENV
+	appID                = 263646         // https://github.com/apps/cheriosapp
 )
 
 func init() {
