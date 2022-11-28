@@ -3,7 +3,6 @@ package sonarqube
 import (
 	"encoding/json"
 	"fmt"
-	"fridaycommit/cherios/handlerGithub"
 	"github.com/go-playground/webhooks/v6/github"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
@@ -140,7 +139,7 @@ func createProject(repositoryPayload github.RepositoryPayload) error { // Maybe 
 
 // createPortfolio Create s SonarQube Portfolio via WebAPI
 func createPortfolio(portfolio string) error { // Maybe we should send the repo object instead because other functions might need to know branch etc.
-	apiUrl := "api/views/create"
+	apiUrl := "/api/views/create"
 	form := url.Values{}
 	form.Add("name", portfolio) // Name for the new portfolio
 	resp, err := sonarqubeCall(http.MethodPost, SonarUrl+apiUrl, form, "application/x-www-form-urlencoded")
@@ -162,7 +161,7 @@ func createPortfolio(portfolio string) error { // Maybe we should send the repo 
 
 // addToPortfolio Adds a project to a portfolio via WebAPI
 func addToPortfolio(portfolio string, project string) error { // Maybe we should send the repo object instead because other functions might need to know branch etc.
-	apiUrl := "api/views/add_project"
+	apiUrl := "/api/views/add_project"
 	form := url.Values{}
 	form.Add("key", portfolio)   // Key of the portfolio
 	form.Add("project", project) // Key of the project
@@ -186,7 +185,7 @@ func addToPortfolio(portfolio string, project string) error { // Maybe we should
 
 // setDefaultBranch renames the current default branch of the sonarqube project to the one that is used in GitHub
 func setDefaultBranch(repositoryPayload github.RepositoryPayload) error {
-	apiUrl := "/api/alm_settings/set_github_binding"
+	apiUrl := "/api/project_branches/rename"
 	form := url.Values{}
 	form.Add("name", repositoryPayload.Repository.DefaultBranch)
 	form.Add("project", repositoryPayload.Repository.Name)
@@ -249,7 +248,16 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) { //TODO handl
 		log.Error(err)
 		return
 	}
-	handlerGithub.CreateSonarQubeFile(repositoryPayload)
+	search, err = SearchSonarQube(PortfolioQualifier, "devops")
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	if !search {
+		createPortfolio("devops")
+	}
+	addToPortfolio("devops", repositoryPayload.Repository.Name)
+	//	handlerGithub.CreateSonarQubeFile(repositoryPayload)
 }
 
 //TODO add function that adds the sonar-projects.properties file back to the repo we just onboarded. I think this belongs in the github library
