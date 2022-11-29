@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"fridaycommit/cherios/sonarqube"
 	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/go-playground/webhooks/v6/github"
 	githubApi "github.com/google/go-github/v48/github"
 	log "github.com/sirupsen/logrus"
 	"net/http"
+	"time"
 )
 
 const (
@@ -37,6 +39,38 @@ type People struct {
 	Name string `json:"Name"`
 	Role string `json:"Role"`
 }
+type Schema struct {
+	Name string `json:"Name,omitempty"`
+
+	Users      []Users    `json:"Users,omitempty"`
+	Visibility string     `json:"Visibility,omitempty"`
+	Topics     []string   `json:"Topics,omitempty"`
+	Status     Status     `json:"Status,omitempty"`
+	Components Components `json:"Components,omitempty"`
+}
+type Users struct {
+	Username string `json:"Username,omitempty"`
+	Role     string `json:"Role,omitempty"`
+}
+type Status struct {
+	State        string `json:"State,omitempty"`
+	ReconsiledAt string `json:"ReconsiledAt,omitempty"`
+}
+type Portfolio struct {
+	Name   string `json:"Name,omitempty"`
+	Status Status `json:"Status,omitempty"`
+}
+type Sonarqube struct {
+	Name       string      `json:"Name,omitempty"`
+	Key        string      `json:"Key,omitempty"`
+	Qualifier  string      `json:"Qualifier,omitempty"`
+	Visibility string      `json:"Visibility,omitempty"`
+	Status     Status      `json:"Status,omitempty"`
+	Portfolio  []Portfolio `json:"Portfolio,omitempty"`
+}
+type Components struct {
+	Sonarqube Sonarqube `json:"Sonarqube,omitempty"`
+}
 
 func initGitHubClient() *githubApi.Client {
 	//	if len(appKey) < 1 {
@@ -51,22 +85,49 @@ func initGitHubClient() *githubApi.Client {
 	return client
 }
 
-func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload) *RepoSchema {
-	githubRepository := RepoSchema{
-		Name: repositoryPayload.Repository.Name,
-		People: []People{
-			{
-				Name: "Felix",
-				Role: "Admin",
-			},
-			{
-				Name: "Viktor",
-				Role: "Admin",
-			},
+func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload) (*Schema, error) {
+	// region Break this out into own function?
+	client := initGitHubClient()
+	users, _, err := client.Repositories.ListCollaborators(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name, &githubApi.ListCollaboratorsOptions{})
+	if err != nil {
+		return nil, err
+	}
+	var userArr []Users
+	for _, githubUser := range users {
+		role, _, err2 := client.Repositories.GetPermissionLevel(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name, *githubUser.Name)
+		if err2 != nil {
+			return nil, err2
+		}
+		userArr = append(userArr, Users{
+			Username: *githubUser.Login,
+			Role:     *role.Permission,
+		})
+	}
+	//endregion
+	repo, _, _ := client.Repositories.Get(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name)
+	sonarQubeComponent, err := sonarqube.OnboardSonarQube(repositoryPayload)
+	if err != nil {
+		return nil, err
+	}
+	githubRepository := Schema{
+		Name:       repositoryPayload.Repository.Name,
+		Visibility: *repo.Visibility,
+		Users:      userArr,
+		Topics:     repo.Topics,
+		Status: Status{
+			State:        "Created",
+			ReconsiledAt: time.Now().String(),
+		},
+		Components: Components{
+			Sonarqube: *sonarQubeComponent,
 		},
 	}
-
-	return &githubRepository
+	/*
+		For the components we could break it into a function that returns a components struct with all the components based on if they are enabled and some tests i guess.
+		This function is probably a mother of function that nests multiple other functions in the end.
+		The region for the getting users and their permissions could be broken out into its own function and we can add fields ontop of user because then we dont have to handle the struct here.
+	*/
+	return &githubRepository, nil
 }
 
 func createFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) {
@@ -110,7 +171,10 @@ func getFile(path string, client *githubApi.Client) (*githubApi.RepositoryConten
 func HandleRepositoryEvent(repositoryPayload github.RepositoryPayload, renameChangePayload RenameChangesPayload) {
 	client := initGitHubClient()
 
-	repositorySchema := convertToGithubRepositorySchema(repositoryPayload)
+	repositorySchema, err := convertToGithubRepositorySchema(repositoryPayload)
+	if err != nil {
+		log.Error(err)
+	}
 	repositoryJSON, err := json.MarshalIndent(repositorySchema, "", "    ")
 	if err != nil {
 		log.Error("Unable to read repository as JSON")
@@ -168,7 +232,7 @@ func CreateSourceHook() {
 	//	var interfaceVal interface{}
 	//	json.Unmarshal(j, &interfaceVal)
 	test := map[string]interface{}{
-		"url":          "http://84.216.123.207:3000/github",
+		"url":          "http://84.216.123.207:3000/github", //TODO make a function that finds out IP adress.
 		"content_type": "json",
 		"insecure_ssl": 0,
 		"secret":       "MyGitHubSuperSecretSecrect...?",

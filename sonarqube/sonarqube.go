@@ -13,6 +13,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 )
 
 const (
@@ -116,7 +117,7 @@ func SearchSonarQube(qualifier string, search string) (bool, error) {
 }
 
 // createProject Creates a SonarQube Project via WebAPI
-func createProject(repositoryPayload github.RepositoryPayload) error { // Maybe we should send the repo object instead because other functions might need to know branch etc.
+func createProject(repositoryPayload github.RepositoryPayload) (*createResp, error) { // Maybe we should send the repo object instead because other functions might need to know branch etc.
 	apiUrl := "/api/projects/create"
 	form := url.Values{}
 	form.Add("name", repositoryPayload.Repository.Name)
@@ -124,18 +125,18 @@ func createProject(repositoryPayload github.RepositoryPayload) error { // Maybe 
 	resp, err := sonarqubeCall(http.MethodPost, SonarUrl+apiUrl, form, "application/x-www-form-urlencoded")
 	defer resp.Body.Close()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var result createResp
 	body, err := io.ReadAll(resp.Body)                   // response body is []byte
 	if err = json.Unmarshal(body, &result); err != nil { // Parse []byte to go struct pointer
-		return err
+		return nil, err
 	}
 	if resp.StatusCode > 299 {
 		log.Warning(resp.StatusCode)
-		return fmt.Errorf("createProject Http Response: %v", resp.StatusCode)
+		return nil, fmt.Errorf("createProject Http Response: %v", resp.StatusCode)
 	}
-	return nil
+	return &result, nil
 }
 
 // createPortfolio Create s SonarQube Portfolio via WebAPI
@@ -224,35 +225,35 @@ func setGitHubBinding(repositoryPayload github.RepositoryPayload) error {
 }
 
 // OnboardSonarQube bootstraps the SonarQube Plugin
-func OnboardSonarQube(repositoryPayload github.RepositoryPayload) { //TODO handle the error from here probably and we might wanna return the created project and some info maybe?
+func OnboardSonarQube(repositoryPayload github.RepositoryPayload) (*handlerGithub.Sonarqube, error) { //TODO handle the error from here probably and we might wanna return the created project and some info maybe?
 	search, err := SearchSonarQube(ProjectQualifier, repositoryPayload.Repository.Name)
 	if err != nil {
 		log.Error(err)
-		return
+		return nil, err
 	}
 	if search {
 		log.Warning("Project " + repositoryPayload.Repository.Name + " Already exists")
-		return
+		return nil, err
 	}
-	err = createProject(repositoryPayload)
+	project, err := createProject(repositoryPayload)
 	if err != nil {
 		log.Error(err)
-		return
+		return nil, err
 	}
 	err = setGitHubBinding(repositoryPayload)
 	if err != nil {
 		log.Error(err)
-		return
+		return nil, err
 	}
 	err = setDefaultBranch(repositoryPayload)
 	if err != nil {
 		log.Error(err)
-		return
+		return nil, err
 	}
 	search, err = SearchSonarQube(PortfolioQualifier, "devops") //TODO the parameters might need to be supplied in some other way as topics arent given at "birth"
 	if err != nil {
 		log.Error(err)
-		return
+		return nil, err
 	}
 	if !search {
 		createPortfolio("devops")
@@ -260,9 +261,21 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) { //TODO handl
 	err = addToPortfolio("devops", repositoryPayload.Repository.Name)
 	if err != nil {
 		log.Error(err)
-		return
+		return nil, err
 	}
 	handlerGithub.CreateSonarQubeFile(repositoryPayload) // TODO add error handling for this function?
+	sq := handlerGithub.Sonarqube{
+		Name:       project.Project.Name,
+		Key:        project.Project.Key,
+		Qualifier:  project.Project.Qualifier,
+		Visibility: project.Project.Visibility,
+		Status: handlerGithub.Status{
+			State:        "Created",
+			ReconsiledAt: time.Now().String(),
+		},
+		Portfolio: nil,
+	}
+	return &sq, nil
 }
 
 //TODO add function that adds the sonar-projects.properties file back to the repo we just onboarded. I think this belongs in the github library
