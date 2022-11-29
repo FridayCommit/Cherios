@@ -39,26 +39,26 @@ type People struct {
 	Name string `json:"Name"`
 	Role string `json:"Role"`
 }
-type Schema struct {
-	Name string `json:"Name,omitempty"`
-
-	Users      []Users    `json:"Users,omitempty"`
+type GitHubRepoSchema struct {
+	Name 		string 	  `json:"Name"`
 	Visibility string     `json:"Visibility,omitempty"`
 	Topics     []string   `json:"Topics,omitempty"`
-	Status     Status     `json:"Status,omitempty"`
+	Status     Status     `json:"Status"`
+	Teams      []string   `json:"Team"`
+	ExtraMembers []People `json:"Name,omitempty"`
 	Components Components `json:"Components,omitempty"`
 }
 type Users struct {
-	Username string `json:"Username,omitempty"`
-	Role     string `json:"Role,omitempty"`
+	Username string `json:"Username"`
+	Role     string `json:"Role"`
 }
 type Status struct {
-	State        string `json:"State,omitempty"`
-	ReconsiledAt string `json:"ReconsiledAt,omitempty"`
+	State        string `json:"State"`
+	ReconsiledAt string `json:"ReconsiledAt"`
 }
 type Portfolio struct {
-	Name   string `json:"Name,omitempty"`
-	Status Status `json:"Status,omitempty"`
+	Name   string `json:"Name"`
+	Status Status `json:"Status"`
 }
 type Sonarqube struct {
 	Name       string      `json:"Name,omitempty"`
@@ -85,7 +85,7 @@ func initGitHubClient() *githubApi.Client {
 	return client
 }
 
-func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload) (*Schema, error) {
+func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload) (*GitHubRepoSchema, error) {
 	// region Break this out into own function?
 	client := initGitHubClient()
 	users, _, err := client.Repositories.ListCollaborators(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name, &githubApi.ListCollaboratorsOptions{})
@@ -109,7 +109,7 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 	if err != nil {
 		return nil, err
 	}
-	githubRepository := Schema{
+	githubRepository := GitHubRepoSchema{
 		Name:       repositoryPayload.Repository.Name,
 		Visibility: *repo.Visibility,
 		Users:      userArr,
