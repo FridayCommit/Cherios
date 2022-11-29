@@ -11,8 +11,6 @@ import (
 	"net/http"
 )
 
-var appKey string
-
 const (
 	Path                 = "/github"
 	repoAsCodeOrg        = "FridayCommit"
@@ -89,7 +87,7 @@ func updateFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOp
 	log.Info(fmt.Sprintf("File %s/%s updated in commit %s", repoAsCode, filePath, *repositoryContentResponse.Commit.SHA))
 }
 
-//TODO maybe public
+// TODO maybe public
 func deleteFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) {
 	repositoryContentResponse, _, err := client.Repositories.DeleteFile(context.TODO(), repoAsCodeOrg, repoAsCodeRepository, filePath, &opts)
 	if err != nil {
@@ -165,14 +163,7 @@ func HandleRepositoryEvent(repositoryPayload github.RepositoryPayload, renameCha
 
 }
 
-/*
-Obmaa
-obama2
-
-
-*/
-
-// Creates a hook to the source of truth repo so that we can see changes to files. Can be ran on init
+// CreateSourceHook Creates a hook to the source of truth repo so that we can see changes to files. Can be ran on init
 func CreateSourceHook() {
 	//	var interfaceVal interface{}
 	//	json.Unmarshal(j, &interfaceVal)
@@ -206,5 +197,31 @@ func CreateSourceHook() {
 	}
 	log.Info(fmt.Sprintf("Hook response %s"), resp.Status)
 	log.Info(fmt.Sprintf("Hook %s created for %s"), hook.Name, repoAsCode)
+
+}
+
+func CreateSonarQubeFile(repositoryPayload github.RepositoryPayload) {
+	client := initGitHubClient()
+	filePath := "sonar-project.properties"
+	message := "Added sonar-project.properties file"
+	fileContent, _ := getFile(filePath, client)
+	var sha *string = nil
+	if fileContent != nil {
+		sha = fileContent.SHA
+	}
+	opts := githubApi.RepositoryContentFileOptions{
+		Message:   &message,
+		Content:   []byte("sonar.projectKey=" + repositoryPayload.Repository.Name),
+		SHA:       sha,
+		Branch:    nil,
+		Author:    nil,
+		Committer: nil,
+	}
+	repositoryContentResponse, _, err := client.Repositories.CreateFile(context.TODO(), repositoryPayload.Organization.Login, repositoryPayload.Repository.Name, filePath, &opts)
+	if err != nil {
+		// TODO: Proper error handling
+		return
+	}
+	log.Info(fmt.Sprintf("File %s/%s created in commit %s", repositoryPayload.Repository.FullName, filePath, *repositoryContentResponse.Commit.SHA))
 
 }
