@@ -31,45 +31,31 @@ type RenameChangesPayload struct {
 	} `json:"changes"`
 }
 
-type RepoSchema struct {
-	Name   string   `json:"Name"`
-	People []People `json:"People"`
-}
 type People struct {
 	Name string `json:"Name"`
 	Role string `json:"Role"`
 }
+type Team struct {
+	Name string `json:"Name"`
+	Role string `json:"Role"`
+}
 type GitHubRepoSchema struct {
-	Name 		string 	  `json:"Name"`
-	Visibility string     `json:"Visibility,omitempty"`
-	Topics     []string   `json:"Topics,omitempty"`
-	Status     Status     `json:"Status"`
-	Teams      []string   `json:"Team"`
-	ExtraMembers []People `json:"Name,omitempty"`
-	Components Components `json:"Components,omitempty"`
+	Name         string     `json:"Name"`
+	Visibility   string     `json:"Visibility,omitempty"`
+	Topics       []string   `json:"Topics,omitempty"`
+	Status       Status     `json:"Status"`
+	Teams        []Team     `json:"Teams,omitempty"`
+	ExtraMembers []People   `json:"Users,omitempty"`
+	Components   Components `json:"Components,omitempty"`
 }
-type Users struct {
-	Username string `json:"Username"`
-	Role     string `json:"Role"`
-}
+
 type Status struct {
 	State        string `json:"State"`
 	ReconsiledAt string `json:"ReconsiledAt"`
 }
-type Portfolio struct {
-	Name   string `json:"Name"`
-	Status Status `json:"Status"`
-}
-type Sonarqube struct {
-	Name       string      `json:"Name,omitempty"`
-	Key        string      `json:"Key,omitempty"`
-	Qualifier  string      `json:"Qualifier,omitempty"`
-	Visibility string      `json:"Visibility,omitempty"`
-	Status     Status      `json:"Status,omitempty"`
-	Portfolio  []Portfolio `json:"Portfolio,omitempty"`
-}
+
 type Components struct {
-	Sonarqube Sonarqube `json:"Sonarqube,omitempty"`
+	Sonarqube sonarqube.Sonarqube `json:"Sonarqube,omitempty"`
 }
 
 func initGitHubClient() *githubApi.Client {
@@ -85,43 +71,58 @@ func initGitHubClient() *githubApi.Client {
 	return client
 }
 
+// https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repository-teams
 func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload) (*GitHubRepoSchema, error) {
 	// region Break this out into own function?
 	client := initGitHubClient()
-	users, _, err := client.Repositories.ListCollaborators(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name, &githubApi.ListCollaboratorsOptions{})
+	users, _, err := client.Repositories.ListCollaborators(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name, &githubApi.ListCollaboratorsOptions{Affiliation: "direct"})
 	if err != nil {
 		return nil, err
 	}
-	var userArr []Users
+	var userArr []People
 	for _, githubUser := range users {
 		role, _, err2 := client.Repositories.GetPermissionLevel(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name, *githubUser.Name)
 		if err2 != nil {
 			return nil, err2
 		}
-		userArr = append(userArr, Users{
-			Username: *githubUser.Login,
-			Role:     *role.Permission,
+		userArr = append(userArr, People{
+			Name: *githubUser.Login,
+			Role: *role.Permission,
 		})
 	}
 	//endregion
+	teams, _, err := client.Repositories.ListTeams(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name, &githubApi.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	var teamArr []Team
+	for _, githubTeam := range teams {
+		teamArr = append(teamArr, Team{
+			Name: *githubTeam.Name,
+			Role: *githubTeam.Permission,
+		})
+	}
 	repo, _, _ := client.Repositories.Get(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name)
+	// Here we might want to have some kind of if statement to check if the sonarQube component is enabled ?
+	githubRepository := GitHubRepoSchema{
+		Name:         repositoryPayload.Repository.Name,
+		Visibility:   *repo.Visibility,
+		Teams:        teamArr,
+		ExtraMembers: userArr,
+		Topics:       repo.Topics,
+		Status: Status{
+			State:        "Created", // This one should be bound to some kind of function return call like that it was successfully created ?
+			ReconsiledAt: time.Now().String(),
+		},
+		Components: Components{},
+	}
+	// there should be an if statement here reading if the component is enabled
 	sonarQubeComponent, err := sonarqube.OnboardSonarQube(repositoryPayload)
 	if err != nil {
 		return nil, err
 	}
-	githubRepository := GitHubRepoSchema{
-		Name:       repositoryPayload.Repository.Name,
-		Visibility: *repo.Visibility,
-		Users:      userArr,
-		Topics:     repo.Topics,
-		Status: Status{
-			State:        "Created",
-			ReconsiledAt: time.Now().String(),
-		},
-		Components: Components{
-			Sonarqube: *sonarQubeComponent,
-		},
-	}
+	createSonarQubeFile(repositoryPayload)
+	githubRepository.Components.Sonarqube = *sonarQubeComponent
 	/*
 		For the components we could break it into a function that returns a components struct with all the components based on if they are enabled and some tests i guess.
 		This function is probably a mother of function that nests multiple other functions in the end.
@@ -264,7 +265,7 @@ func CreateSourceHook() {
 
 }
 
-func CreateSonarQubeFile(repositoryPayload github.RepositoryPayload) {
+func createSonarQubeFile(repositoryPayload github.RepositoryPayload) { //TODO add error handling
 	client := initGitHubClient()
 	filePath := "sonar-project.properties"
 	message := "Added sonar-project.properties file"

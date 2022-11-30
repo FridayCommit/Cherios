@@ -3,7 +3,6 @@ package sonarqube
 import (
 	"encoding/json"
 	"fmt"
-	"fridaycommit/cherios/handlerGithub"
 	"github.com/go-playground/webhooks/v6/github"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
@@ -26,6 +25,23 @@ const (
 var (
 	SonarUrl = "https://sonarqube.snowdev.io"
 )
+
+type Status struct {
+	State        string `json:"State"`
+	ReconsiledAt string `json:"ReconsiledAt"`
+}
+type Portfolio struct {
+	Name   string `json:"Name"`
+	Status Status `json:"Status"`
+}
+type Sonarqube struct {
+	Name       string      `json:"Name"` // I don't think these fields can be empty?
+	Key        string      `json:"Key"`
+	Qualifier  string      `json:"Qualifier"`
+	Visibility string      `json:"Visibility"`
+	Status     Status      `json:"Status"`
+	Portfolio  []Portfolio `json:"Portfolio,omitempty"`
+}
 
 // TODO
 // We need to get or pass the default branch from the github call
@@ -225,7 +241,7 @@ func setGitHubBinding(repositoryPayload github.RepositoryPayload) error {
 }
 
 // OnboardSonarQube bootstraps the SonarQube Plugin
-func OnboardSonarQube(repositoryPayload github.RepositoryPayload) (*handlerGithub.Sonarqube, error) { //TODO handle the error from here probably and we might wanna return the created project and some info maybe?
+func OnboardSonarQube(repositoryPayload github.RepositoryPayload) (*Sonarqube, error) { //TODO handle the error from here probably and we might wanna return the created project and some info maybe?
 	search, err := SearchSonarQube(ProjectQualifier, repositoryPayload.Repository.Name)
 	if err != nil {
 		log.Error(err)
@@ -263,13 +279,13 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) (*handlerGithu
 		log.Error(err)
 		return nil, err
 	}
-	handlerGithub.CreateSonarQubeFile(repositoryPayload) // TODO add error handling for this function?
-	sq := handlerGithub.Sonarqube{
+	//	handlerGithub.CreateSonarQubeFile(repositoryPayload) // TODO add error handling for this function?
+	sq := Sonarqube{
 		Name:       project.Project.Name,
 		Key:        project.Project.Key,
 		Qualifier:  project.Project.Qualifier,
 		Visibility: project.Project.Visibility,
-		Status: handlerGithub.Status{
+		Status: Status{
 			State:        "Created",
 			ReconsiledAt: time.Now().String(),
 		},
