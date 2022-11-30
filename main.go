@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fridaycommit/cherios/handlerGithub"
-	"fridaycommit/cherios/sonarqube"
 	"github.com/go-playground/webhooks/v6/github"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -55,14 +54,13 @@ func main() {
 		switch payload.(type) {
 
 		case github.RepositoryPayload:
-			renameChangePayload, err := ParseRenameChangeHook(r)
-			if err != nil {
-				log.Warning(err)
-			}
-			payload, err := hook.Parse(r, github.WorkflowJobEvent, github.PullRequestEvent)
+			var renameChangePayload handlerGithub.RenameChangesPayload
+
 			repository := payload.(github.RepositoryPayload)
+			//			if repository.Action == "renamed" { // TODO this function is broken we need to fix it
+			//				renameChangePayload, err = ParseRenameChangeHook(r)
+			//			}
 			handlerGithub.HandleRepositoryEvent(repository, renameChangePayload)
-			sonarqube.OnboardSonarQube(repository)
 		default:
 			log.Warning("Something went wrong")
 		}

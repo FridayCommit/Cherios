@@ -117,12 +117,12 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 		Components: Components{},
 	}
 	// there should be an if statement here reading if the component is enabled
-	sonarQubeComponent, err := sonarqube.OnboardSonarQube(repositoryPayload)
-	if err != nil {
-		return nil, err
-	}
+	//	sonarQubeComponent, err := sonarqube.OnboardSonarQube(repositoryPayload)
+	//	if err != nil {
+	//		return nil, err
+	//	}
 	createSonarQubeFile(repositoryPayload)
-	githubRepository.Components.Sonarqube = *sonarQubeComponent
+	//	githubRepository.Components.Sonarqube = *sonarQubeComponent
 	/*
 		For the components we could break it into a function that returns a components struct with all the components based on if they are enabled and some tests i guess.
 		This function is probably a mother of function that nests multiple other functions in the end.
