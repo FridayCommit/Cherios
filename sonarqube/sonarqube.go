@@ -287,7 +287,7 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) (*Sonarqube, e
 		Visibility: project.Project.Visibility,
 		Status: Status{
 			State:        "Created",
-			ReconsiledAt: time.Now().String(),
+			ReconsiledAt: time.Now().UTC().String(),
 		},
 		Portfolio: nil,
 	}

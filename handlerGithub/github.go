@@ -111,8 +111,8 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 		ExtraMembers: userArr,
 		Topics:       repo.Topics,
 		Status: Status{
-			State:        "Created", // This one should be bound to some kind of function return call like that it was successfully created ?
-			ReconsiledAt: time.Now().String(),
+			State:        "Created", // This one should be bound to some kind of function return call like that it was successfully created ? Like return error in any of these function, if not then we return default like create
+			ReconsiledAt: time.Now().UTC().String(),
 		},
 		Components: Components{},
 	}
