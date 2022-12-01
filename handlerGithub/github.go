@@ -10,15 +10,23 @@ import (
 	githubApi "github.com/google/go-github/v48/github"
 	log "github.com/sirupsen/logrus"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 )
 
 const (
-	Path                 = "/github"
-	repoAsCodeOrg        = "FridayCommit"
-	repoAsCodeRepository = "as-code"
+	Path = "/github"
+	//	repoAsCodeOrg        = "FridayCommit"
+	//	repoAsCodeRepository = "as-code"
+	//	repoAsCode           = repoAsCodeOrg + "/" + repoAsCodeRepository
+	//	appID                = 263646 // https://github.com/apps/cheriosapp
+)
+
+var (
+	repoAsCodeOrg        = os.Getenv("repoAsCodeOrg")
+	repoAsCodeRepository = os.Getenv("repoAsCodeRepository")
 	repoAsCode           = repoAsCodeOrg + "/" + repoAsCodeRepository
-	appID                = 263646 // https://github.com/apps/cheriosapp
 )
 
 type RenameChangesPayload struct {
@@ -58,10 +66,14 @@ type Components struct {
 	Sonarqube sonarqube.Sonarqube `json:"Sonarqube,omitempty"`
 }
 
-func initGitHubClient() *githubApi.Client {
+func initGitHubClient() *githubApi.Client { // TODO return error here or just do fatal?
 	//	if len(appKey) < 1 {
 	//		log.Fatalln("Missing App Key")
 	//	}
+	appID, err := strconv.ParseInt(os.Getenv("appid"), 10, 64)
+	if err != nil {
+		log.Fatalln(err)
+	}
 	itr, err := ghinstallation.NewKeyFromFile(http.DefaultTransport, appID, 31393521, "cheriosapp.2022-11-19.private-key.pem")
 	//	itr, err := ghinstallation.New(http.DefaultTransport, 250575, 30374345, []byte(appKey))
 	if err != nil {
@@ -71,7 +83,7 @@ func initGitHubClient() *githubApi.Client {
 	return client
 }
 
-// https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repository-teams
+// TODO description
 func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload) (*GitHubRepoSchema, error) {
 	// region Break this out into own function?
 	client := initGitHubClient()
@@ -91,6 +103,7 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 		})
 	}
 	//endregion
+	// https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repository-teams
 	teams, _, err := client.Repositories.ListTeams(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name, &githubApi.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -103,7 +116,6 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 		})
 	}
 	repo, _, _ := client.Repositories.Get(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name)
-	// Here we might want to have some kind of if statement to check if the sonarQube component is enabled ?
 	githubRepository := GitHubRepoSchema{
 		Name:         repositoryPayload.Repository.Name,
 		Visibility:   *repo.Visibility,
@@ -114,15 +126,20 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 			State:        "Created", // This one should be bound to some kind of function return call like that it was successfully created ? Like return error in any of these function, if not then we return default like create
 			ReconsiledAt: time.Now().UTC().String(),
 		},
-		Components: Components{},
 	}
-	// there should be an if statement here reading if the component is enabled
-	//	sonarQubeComponent, err := sonarqube.OnboardSonarQube(repositoryPayload)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	createSonarQubeFile(repositoryPayload)
-	//	githubRepository.Components.Sonarqube = *sonarQubeComponent
+	if os.Getenv("enable-sonarqube") == "true" { // we could check the token but i think thats the sonarqube libraries job
+		sonarQubeComponent, err2 := sonarqube.OnboardSonarQube(repositoryPayload)
+		if err2 != nil {
+			return nil, err2
+		}
+		err = createSonarQubeFile(repositoryPayload)
+		if err != nil {
+			log.Warning(err)
+			return nil, err
+		}
+		githubRepository.Components.Sonarqube = *sonarQubeComponent
+
+	}
 	/*
 		For the components we could break it into a function that returns a components struct with all the components based on if they are enabled and some tests i guess.
 		This function is probably a mother of function that nests multiple other functions in the end.
@@ -131,42 +148,41 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 	return &githubRepository, nil
 }
 
-func createFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) {
+func createFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) error {
 	repositoryContentResponse, _, err := client.Repositories.CreateFile(context.TODO(), repoAsCodeOrg, repoAsCodeRepository, filePath, &opts)
 	if err != nil {
-		// TODO: Proper error handling
-		return
+		return err
 	}
 	log.Info(fmt.Sprintf("File %s/%s created in commit %s", repoAsCode, filePath, *repositoryContentResponse.Commit.SHA))
+	return nil
 }
 
-func updateFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) {
+func updateFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) error {
 	repositoryContentResponse, _, err := client.Repositories.UpdateFile(context.TODO(), repoAsCodeOrg, repoAsCodeRepository, filePath, &opts)
 	if err != nil {
-		// TODO: Proper error handling
-		return
+		return err
 	}
 	log.Info(fmt.Sprintf("File %s/%s updated in commit %s", repoAsCode, filePath, *repositoryContentResponse.Commit.SHA))
+	return nil
 }
 
 // TODO maybe public
-func deleteFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) {
+func deleteFile(client *githubApi.Client, opts githubApi.RepositoryContentFileOptions, filePath string) error {
 	repositoryContentResponse, _, err := client.Repositories.DeleteFile(context.TODO(), repoAsCodeOrg, repoAsCodeRepository, filePath, &opts)
 	if err != nil {
-		// TODO: Proper error handling
-		return
+		return err
 	}
 	log.Info(fmt.Sprintf("File %s/%s deleted in commit %s", repoAsCode, filePath, *repositoryContentResponse.Commit.SHA))
+	return nil
 }
 
-func getFile(path string, client *githubApi.Client) (*githubApi.RepositoryContent, bool) {
+func getFile(path string, client *githubApi.Client) (*githubApi.RepositoryContent, bool, error) {
 	opts := githubApi.RepositoryContentGetOptions{}
 	fileContent, _, resp, err := client.Repositories.GetContents(context.TODO(), repoAsCodeOrg, repoAsCodeRepository, path, &opts)
 	if err != nil {
-		// TODO: Proper error handling
-		return nil, false
+		return nil, false, err
 	}
-	return fileContent, resp.StatusCode == http.StatusOK
+	return fileContent, resp.StatusCode == http.StatusOK, nil
 }
 
 func HandleRepositoryEvent(repositoryPayload github.RepositoryPayload, renameChangePayload RenameChangesPayload) {
@@ -183,7 +199,11 @@ func HandleRepositoryEvent(repositoryPayload github.RepositoryPayload, renameCha
 
 	filePath := fmt.Sprintf("github/%s.json", repositoryPayload.Repository.Name)
 	message := fmt.Sprintf("Update GitHub repo %s", repositoryPayload.Repository.Name)
-	fileContent, exists := getFile(filePath, client)
+	fileContent, exists, err := getFile(filePath, client)
+	if err != nil {
+		log.Error(err)
+		return
+	}
 	var sha *string = nil
 	if fileContent != nil {
 		sha = fileContent.SHA
@@ -200,15 +220,31 @@ func HandleRepositoryEvent(repositoryPayload github.RepositoryPayload, renameCha
 	switch repositoryPayload.Action {
 	case "created":
 		if exists { //If the file already exist for some reason, we update it instead of creating. Catch
-			updateFile(client, opts, filePath)
+			err = updateFile(client, opts, filePath)
+			if err != nil {
+				log.Error(err)
+				return
+			}
 		} else {
-			createFile(client, opts, filePath)
+			err = createFile(client, opts, filePath)
+			if err != nil {
+				log.Error(err)
+				return
+			}
 		}
 	case "edited":
 		// TODO: Handle changes of topics, default branch, description, or homepage of a repository was changed ()
-		updateFile(client, opts, filePath)
+		err = updateFile(client, opts, filePath)
+		if err != nil {
+			log.Error(err)
+			return
+		}
 	case "deleted":
-		deleteFile(client, opts, filePath)
+		err = deleteFile(client, opts, filePath)
+		if err != nil {
+			log.Error(err)
+			return
+		}
 	case "renamed":
 		/**
 		// TODO When Changing the name of the Repo
@@ -221,7 +257,11 @@ func HandleRepositoryEvent(repositoryPayload github.RepositoryPayload, renameCha
 		client.Git.CreateTree(context.TODO(), repoAsCodeOrg, repoAsCodeRepository)
 		*/
 		// Actions should be 1. Get the file 2. Populate our schema with the source schema 3. Add changes 4. Push
-		updateFile(client, opts, filePath)
+		err = updateFile(client, opts, filePath)
+		if err != nil {
+			log.Error(err)
+			return
+		}
 	default:
 		log.Warning("Action " + repositoryPayload.Action + " is not supported")
 	}
@@ -265,11 +305,14 @@ func CreateSourceHook() {
 
 }
 
-func createSonarQubeFile(repositoryPayload github.RepositoryPayload) { //TODO add error handling
+func createSonarQubeFile(repositoryPayload github.RepositoryPayload) error { //TODO add error handling
 	client := initGitHubClient()
 	filePath := "sonar-project.properties"
 	message := "Added sonar-project.properties file"
-	fileContent, _ := getFile(filePath, client)
+	fileContent, _, err := getFile(filePath, client)
+	if err != nil {
+		return err
+	}
 	var sha *string = nil
 	if fileContent != nil {
 		sha = fileContent.SHA
@@ -284,9 +327,9 @@ func createSonarQubeFile(repositoryPayload github.RepositoryPayload) { //TODO ad
 	}
 	repositoryContentResponse, _, err := client.Repositories.CreateFile(context.TODO(), repositoryPayload.Organization.Login, repositoryPayload.Repository.Name, filePath, &opts)
 	if err != nil {
-		// TODO: Proper error handling
-		return
+		return err
 	}
 	log.Info(fmt.Sprintf("File %s/%s created in commit %s", repositoryPayload.Repository.FullName, filePath, *repositoryContentResponse.Commit.SHA))
 
+	return nil
 }

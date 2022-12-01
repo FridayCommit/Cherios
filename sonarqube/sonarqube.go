@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-playground/webhooks/v6/github"
-	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
@@ -70,11 +69,7 @@ type createResp struct {
 
 // sonarqubeCall calls the authenticates and calls the sonarqube webApi
 func sonarqubeCall(method string, url string, form url.Values, contentType string) (*http.Response, error) {
-	err := godotenv.Load("sonar.env") // This env file needs to be in root. we will remove this during prod it's just for good development
-	if err != nil {
-		return nil, fmt.Errorf("cannot find SonarQube Token")
-	}
-	token := os.Getenv("sonartoken")
+	token := os.Getenv("sonar-token")
 	client := &http.Client{
 		Transport:     nil,
 		CheckRedirect: nil,
