@@ -265,7 +265,7 @@ func CreateSourceHook() {
 
 }
 
-func createSonarQubeFile(repositoryPayload github.RepositoryPayload) { //TODO add error handling
+func createSonarQubeFile(repositoryPayload github.RepositoryPayload) { //TODO add error handling and pass client probably
 	client := initGitHubClient()
 	filePath := "sonar-project.properties"
 	message := "Added sonar-project.properties file"
