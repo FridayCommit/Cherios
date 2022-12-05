@@ -13,4 +13,5 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 # Extra Files
-*.env
+# Our Secrets File
+secrets.env
