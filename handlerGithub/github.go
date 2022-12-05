@@ -26,7 +26,11 @@ const (
 var (
 	repoAsCodeOrg        = os.Getenv("repoAsCodeOrg")
 	repoAsCodeRepository = os.Getenv("repoAsCodeRepository")
-	repoAsCode           = repoAsCodeOrg + "/" + repoAsCodeRepository
+	repoAsCode           = repoAsCodeOrg + "/" + repoAsCodeRepository // makes conversion easier
+	appID                = os.Getenv("appId")                         // Conversation can be done on function level
+	installationID       = os.Getenv("installationId")                // Conversation can be done on function level
+	appKey               = os.Getenv("appKey")
+	sonarqubeBool        = os.Getenv("enable-sonarqube")
 )
 
 type RenameChangesPayload struct {
@@ -67,14 +71,18 @@ type Components struct {
 }
 
 func initGitHubClient() *githubApi.Client { // TODO return error here or just do fatal?
+	appID64, err := strconv.ParseInt(appID, 10, 64)
+	if err != nil {
+		// TODO
+	}
+	installID64, err := strconv.ParseInt(installationID, 10, 64)
+	if err != nil {
+		// TODO
+	}
 	//	if len(appKey) < 1 {
 	//		log.Fatalln("Missing App Key")
 	//	}
-	appID, err := strconv.ParseInt(os.Getenv("appid"), 10, 64)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	itr, err := ghinstallation.NewKeyFromFile(http.DefaultTransport, appID, 31393521, "cheriosapp.2022-11-19.private-key.pem")
+	itr, err := ghinstallation.NewKeyFromFile(http.DefaultTransport, appID64, installID64, "cheriosapp.2022-11-19.private-key.pem")
 	//	itr, err := ghinstallation.New(http.DefaultTransport, 250575, 30374345, []byte(appKey))
 	if err != nil {
 		log.Fatalln(err)
@@ -86,6 +94,7 @@ func initGitHubClient() *githubApi.Client { // TODO return error here or just do
 // TODO description
 func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload) (*GitHubRepoSchema, error) {
 	// region Break this out into own function?
+
 	client := initGitHubClient()
 	users, _, err := client.Repositories.ListCollaborators(context.TODO(), repositoryPayload.Repository.Owner.Login, repositoryPayload.Repository.Name, &githubApi.ListCollaboratorsOptions{Affiliation: "direct"})
 	if err != nil {
@@ -127,7 +136,7 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 			ReconsiledAt: time.Now().UTC().String(),
 		},
 	}
-	if os.Getenv("enable-sonarqube") == "true" { // we could check the token but i think thats the sonarqube libraries job
+	if sonarqubeBool == "true" { // we could check the token but i think thats the sonarqube libraries job
 		sonarQubeComponent, err2 := sonarqube.OnboardSonarQube(repositoryPayload)
 		if err2 != nil {
 			return nil, err2
@@ -270,6 +279,7 @@ func HandleRepositoryEvent(repositoryPayload github.RepositoryPayload, renameCha
 
 // CreateSourceHook Creates a hook to the source of truth repo so that we can see changes to files. Can be ran on init
 func CreateSourceHook() {
+
 	//	var interfaceVal interface{}
 	//	json.Unmarshal(j, &interfaceVal)
 	test := map[string]interface{}{
