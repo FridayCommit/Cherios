@@ -121,7 +121,9 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 	//	if err != nil {
 	//		return nil, err
 	//	}
-	createSonarQubeFile(repositoryPayload)
+	createSonarQubeFile(client, repositoryPayload)
+	addDefaultBranchRules(client, repositoryPayload)
+	addDefaultWorkflows(client, repositoryPayload)
 	//	githubRepository.Components.Sonarqube = *sonarQubeComponent
 	/*
 		For the components we could break it into a function that returns a components struct with all the components based on if they are enabled and some tests i guess.
@@ -265,8 +267,7 @@ func CreateSourceHook() {
 
 }
 
-func createSonarQubeFile(repositoryPayload github.RepositoryPayload) { //TODO add error handling and pass client probably
-	client := initGitHubClient()
+func createSonarQubeFile(client *githubApi.Client, repositoryPayload github.RepositoryPayload) { //TODO add error handling and pass client probably
 	filePath := "sonar-project.properties"
 	message := "Added sonar-project.properties file"
 	fileContent, _ := getFile(filePath, client)
@@ -289,4 +290,81 @@ func createSonarQubeFile(repositoryPayload github.RepositoryPayload) { //TODO ad
 	}
 	log.Info(fmt.Sprintf("File %s/%s created in commit %s", repositoryPayload.Repository.FullName, filePath, *repositoryContentResponse.Commit.SHA))
 
+}
+func addDefaultBranchRules(client *githubApi.Client, repositoryPayload github.RepositoryPayload) error {
+	//TODO all of these should be read from some kind of config file. But for now lets hardcode them
+	// Add the app itself to the allowed list. It requires a slug tho ?
+	// Add Sonarqube as a Required Status Check eventually
+	pullRequest := githubApi.PullRequestReviewsEnforcementRequest{
+		BypassPullRequestAllowancesRequest: nil,
+		DismissalRestrictionsRequest:       nil,
+		DismissStaleReviews:                true,
+		RequireCodeOwnerReviews:            false,
+		RequiredApprovingReviewCount:       1,
+	}
+	opts := githubApi.ProtectionRequest{
+		RequiredStatusChecks:           nil,
+		RequiredPullRequestReviews:     &pullRequest,
+		EnforceAdmins:                  false,
+		Restrictions:                   nil,
+		RequireLinearHistory:           nil,
+		AllowForcePushes:               nil,
+		AllowDeletions:                 nil,
+		RequiredConversationResolution: nil,
+	}
+	_, _, err := client.Repositories.UpdateBranchProtection(context.TODO(), repositoryPayload.Organization.Login, repositoryPayload.Repository.Name, repositoryPayload.Repository.DefaultBranch, &opts)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+func addDefaultWorkflows(client *githubApi.Client, repositoryPayload github.RepositoryPayload) error {
+	//TODO all of these should be read from some kind of config file. But for now lets hardcode them
+	yaml := `on:
+  # Trigger analysis when pushing in master or pull requests, and when creating
+  # a pull request. 
+  push:
+    branches:9
+      - master
+  pull_request:
+      types: [opened, synchronize, reopened]
+
+name: Main Workflow
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        # Disabling shallow clone is recommended for improving relevancy of reporting
+        fetch-depth: 0
+    - name: SonarQube Scan
+      uses: sonarsource/sonarqube-scan-action@master
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}`
+	filePath := ".github/workflows/sonarscan.yml"
+	message := "Added sonarscan workflow"
+	fileContent, _ := getFile(filePath, client)
+	var sha *string = nil
+	if fileContent != nil {
+		sha = fileContent.SHA
+	}
+	opts := githubApi.RepositoryContentFileOptions{
+		Message:   &message,
+		Content:   []byte(yaml),
+		SHA:       sha,
+		Branch:    nil,
+		Author:    nil,
+		Committer: nil,
+	}
+	repositoryContentResponse, _, err := client.Repositories.CreateFile(context.TODO(), repositoryPayload.Organization.Login, repositoryPayload.Repository.Name, filePath, &opts)
+	if err != nil {
+		// TODO: Proper error handling
+		return err
+	}
+	log.Info(fmt.Sprintf("Workflow %s/%s created in commit %s", repositoryPayload.Repository.FullName, filePath, *repositoryContentResponse.Commit.SHA))
+
+	return nil
 }
