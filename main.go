@@ -3,26 +3,35 @@ package main
 //TODO
 // Implement a Schema with the most important fields for repo
 // Make Cherios check and create webhook to the as-code repo if needed
+
+// TODO Environments
+// Make a function that checks the required variables ? maybe docker can do that :)
 import (
 	"bytes"
 	"encoding/json"
 	"fridaycommit/cherios/handlerGithub"
 	"github.com/go-playground/webhooks/v6/github"
+	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net/http"
 )
 
-const ( // Move some of these to Inputs instead they shouldnt be Constants. except maybe the webhook path ?
-	path                 = "/github"
-	repoAsCodeOrg        = "FridayCommit" // Set as ENV
-	repoAsCodeRepository = "as-code"      // Set as ENV
-	appID                = 263646         // https://github.com/apps/cheriosapp
+const ( // Move some of these to Inputs instead they shouldn't be Constants. except maybe the webhook path ?
+	path = "/github"
 )
 
 func init() {
 	// Bootstrap
+	err := godotenv.Load("settings.env") // Includes our settings such as enable sonarqube and config for RepoAsCode
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = godotenv.Load("secrets.env") // This env file needs to be in root. we will remove this during prod it's just for good development
+	if err != nil {
+		log.Fatalln(err)
+	}
 	handlerGithub.CreateSourceHook()
 }
 
