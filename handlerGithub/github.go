@@ -71,11 +71,12 @@ func initGitHubClient() *githubApi.Client { // TODO return error here or just do
 	if err != nil {
 		// TODO
 	}
+	//	appKey := os.Getenv("appKey")
 	//	if len(appKey) < 1 {
 	//		log.Fatalln("Missing App Key")
 	//	}
 	itr, err := ghinstallation.NewKeyFromFile(http.DefaultTransport, appID64, installID64, "cheriosapp.2022-11-19.private-key.pem")
-	//	itr, err := ghinstallation.New(http.DefaultTransport, 250575, 30374345, []byte(appKey))
+	//	itr, err := ghinstallation.New(http.DefaultTransport, appID64, installID64, []byte(appKey))
 	if err != nil {
 		log.Fatalln(err)
 	}
