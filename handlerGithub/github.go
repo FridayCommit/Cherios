@@ -9,6 +9,7 @@ import (
 	"github.com/go-playground/webhooks/v6/github"
 	githubApi "github.com/google/go-github/v48/github"
 	log "github.com/sirupsen/logrus"
+	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -122,8 +123,14 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 	//		return nil, err
 	//	}
 	createSonarQubeFile(client, repositoryPayload)
-	addDefaultBranchRules(client, repositoryPayload)
-	addDefaultWorkflows(client, repositoryPayload)
+	err = addDefaultBranchRules(client, repositoryPayload)
+	if err != nil { // TODO we should catch the specific error that says you need github pro. That is an error only applied for some
+		return nil, err
+	}
+	err = addDefaultWorkflows(client, repositoryPayload)
+	if err != nil {
+		return nil, err
+	}
 	//	githubRepository.Components.Sonarqube = *sonarQubeComponent
 	/*
 		For the components we could break it into a function that returns a components struct with all the components based on if they are enabled and some tests i guess.
@@ -269,7 +276,7 @@ func CreateSourceHook() {
 
 func createSonarQubeFile(client *githubApi.Client, repositoryPayload github.RepositoryPayload) { //TODO add error handling and pass client probably
 	filePath := "sonar-project.properties"
-	message := "Added sonar-project.properties file"
+	message := "[skip ci] Added sonar-project.properties file"
 	fileContent, _ := getFile(filePath, client)
 	var sha *string = nil
 	if fileContent != nil {
@@ -321,31 +328,14 @@ func addDefaultBranchRules(client *githubApi.Client, repositoryPayload github.Re
 }
 func addDefaultWorkflows(client *githubApi.Client, repositoryPayload github.RepositoryPayload) error {
 	//TODO all of these should be read from some kind of config file. But for now lets hardcode them
-	yaml := `on:
-  # Trigger analysis when pushing in master or pull requests, and when creating
-  # a pull request. 
-  push:
-    branches:9
-      - master
-  pull_request:
-      types: [opened, synchronize, reopened]
-
-name: Main Workflow
-jobs:
-  sonarqube:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
-        fetch-depth: 0
-    - name: SonarQube Scan
-      uses: sonarsource/sonarqube-scan-action@master
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}`
+	// The workflowContent could probably be some kind of GitHub Struct. Maybe the library has a struct for it
+	// This is a point of discussion i guess
+	content, err := ioutil.ReadFile("workflow.yml")
+	if err != nil {
+		return err
+	}
 	filePath := ".github/workflows/sonarscan.yml"
-	message := "Added sonarscan workflow"
+	message := "[skip ci] Added sonarscan workflow"
 	fileContent, _ := getFile(filePath, client)
 	var sha *string = nil
 	if fileContent != nil {
@@ -353,7 +343,7 @@ jobs:
 	}
 	opts := githubApi.RepositoryContentFileOptions{
 		Message:   &message,
-		Content:   []byte(yaml),
+		Content:   content,
 		SHA:       sha,
 		Branch:    nil,
 		Author:    nil,
