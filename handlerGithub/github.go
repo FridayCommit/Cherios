@@ -17,20 +17,12 @@ import (
 
 const (
 	Path = "/github"
-	//	repoAsCodeOrg        = "FridayCommit"
-	//	repoAsCodeRepository = "as-code"
-	//	repoAsCode           = repoAsCodeOrg + "/" + repoAsCodeRepository
-	//	appID                = 263646 // https://github.com/apps/cheriosapp
 )
 
 var (
-	repoAsCodeOrg        = os.Getenv("repoAsCodeOrg")
-	repoAsCodeRepository = os.Getenv("repoAsCodeRepository")
-	repoAsCode           = repoAsCodeOrg + "/" + repoAsCodeRepository // makes conversion easier
-	appID                = os.Getenv("appId")                         // Conversation can be done on function level
-	installationID       = os.Getenv("installationId")                // Conversation can be done on function level
-	appKey               = os.Getenv("appKey")
-	sonarqubeBool        = os.Getenv("enable-sonarqube")
+	repoAsCodeOrg        string
+	repoAsCodeRepository string
+	repoAsCode           string // makes conversion easier
 )
 
 type RenameChangesPayload struct {
@@ -71,11 +63,11 @@ type Components struct {
 }
 
 func initGitHubClient() *githubApi.Client { // TODO return error here or just do fatal?
-	appID64, err := strconv.ParseInt(appID, 10, 64)
+	appID64, err := strconv.ParseInt(os.Getenv("appId"), 10, 64)
 	if err != nil {
 		// TODO
 	}
-	installID64, err := strconv.ParseInt(installationID, 10, 64)
+	installID64, err := strconv.ParseInt(os.Getenv("installationId"), 10, 64)
 	if err != nil {
 		// TODO
 	}
@@ -136,7 +128,7 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 			ReconsiledAt: time.Now().UTC().String(),
 		},
 	}
-	if sonarqubeBool == "true" { // we could check the token but i think thats the sonarqube libraries job
+	if os.Getenv("enable-sonarqube") == "true" { // we could check the token but i think thats the sonarqube libraries job
 		sonarQubeComponent, err2 := sonarqube.OnboardSonarQube(repositoryPayload)
 		if err2 != nil {
 			return nil, err2
@@ -278,10 +270,12 @@ func HandleRepositoryEvent(repositoryPayload github.RepositoryPayload, renameCha
 }
 
 // CreateSourceHook Creates a hook to the source of truth repo so that we can see changes to files. Can be ran on init
+// This function currently functions as Init for the modules function
 func CreateSourceHook() {
-
-	//	var interfaceVal interface{}
-	//	json.Unmarshal(j, &interfaceVal)
+	//Set used globals
+	repoAsCodeOrg = os.Getenv("repoAsCodeOrg")
+	repoAsCodeRepository = os.Getenv("repoAsCodeRepository")
+	repoAsCode = repoAsCodeOrg + "/" + repoAsCodeRepository // makes conversion easier
 	test := map[string]interface{}{
 		"url":          "http://84.216.123.207:3000/github", //TODO make a function that finds out IP adress.
 		"content_type": "json",
