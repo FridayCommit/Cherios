@@ -266,21 +266,6 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) (*Sonarqube, e
 		log.Error(err)
 		return nil, err
 	}
-	// Considering this cannot be done with the 1. current scope because we need the common interface 2. It handles other parts of the process we might wanna break this out
-	search, err = SearchSonarQube(PortfolioQualifier, "devops") //TODO the parameters might need to be supplied in some other way as topics arent given at "birth"
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	if !search {
-		createPortfolio("devops")
-	}
-	err = addToPortfolio("devops", repositoryPayload.Repository.Name)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	//	handlerGithub.CreateSonarQubeFile(repositoryPayload) // TODO add error handling for this function?
 	sq := Sonarqube{
 		Name:       project.Project.Name,
 		Key:        project.Project.Key,
@@ -293,6 +278,32 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) (*Sonarqube, e
 		Portfolio: nil,
 	}
 	return &sq, nil
+}
+
+// Considering this cannot be done with the 1. current scope because we need the common interface 2. It handles other parts of the process we might wanna break this out
+func OnboardSonarQubePort(repositoryPayload github.RepositoryPayload, project string) (*Portfolio, error) {
+	search, err := SearchSonarQube(PortfolioQualifier, project) //TODO the parameters might need to be supplied in some other way as topics arent given at "birth"
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	if !search {
+		createPortfolio(project)
+	}
+	err = addToPortfolio(project, repositoryPayload.Repository.Name)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+	port := Portfolio{
+		Name: project,
+		Status: Status{
+			State:        "Created",
+			ReconsiledAt: time.Now().UTC().String(),
+		},
+	}
+	return &port, nil
+
 }
 
 //TODO add function that adds the sonar-projects.properties file back to the repo we just onboarded. I think this belongs in the github library
