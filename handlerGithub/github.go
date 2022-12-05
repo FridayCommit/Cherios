@@ -9,6 +9,7 @@ import (
 	"github.com/go-playground/webhooks/v6/github"
 	githubApi "github.com/google/go-github/v48/github"
 	log "github.com/sirupsen/logrus"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -129,6 +130,7 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 			ReconsiledAt: time.Now().UTC().String(),
 		},
 	}
+
 	if os.Getenv("enable-sonarqube") == "true" { // we could check the token but i think thats the sonarqube libraries job
 		sonarQubeComponent, err2 := sonarqube.OnboardSonarQube(repositoryPayload)
 		if err2 != nil {
@@ -142,6 +144,8 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 		githubRepository.Components.Sonarqube = *sonarQubeComponent
 
 	}
+
+
 	/*
 		For the components we could break it into a function that returns a components struct with all the components based on if they are enabled and some tests i guess.
 		This function is probably a mother of function that nests multiple other functions in the end.
@@ -310,14 +314,11 @@ func CreateSourceHook() {
 
 }
 
-func createSonarQubeFile(repositoryPayload github.RepositoryPayload) error { //TODO add error handling
-	client := initGitHubClient()
+
+func createSonarQubeFile(client *githubApi.Client, repositoryPayload github.RepositoryPayload) { //TODO add error handling and pass client probably
 	filePath := "sonar-project.properties"
-	message := "Added sonar-project.properties file"
-	fileContent, _, err := getFile(filePath, client)
-	if err != nil {
-		return err
-	}
+	message := "[skip ci] Added sonar-project.properties file"
+	fileContent, _ := getFile(filePath, client)
 	var sha *string = nil
 	if fileContent != nil {
 		sha = fileContent.SHA
@@ -335,6 +336,66 @@ func createSonarQubeFile(repositoryPayload github.RepositoryPayload) error { //T
 		return err
 	}
 	log.Info(fmt.Sprintf("File %s/%s created in commit %s", repositoryPayload.Repository.FullName, filePath, *repositoryContentResponse.Commit.SHA))
+
+	return nil
+}
+func addDefaultBranchRules(client *githubApi.Client, repositoryPayload github.RepositoryPayload) error {
+	//TODO all of these should be read from some kind of config file. But for now lets hardcode them
+	// Add the app itself to the allowed list. It requires a slug tho ?
+	// Add Sonarqube as a Required Status Check eventually
+	pullRequest := githubApi.PullRequestReviewsEnforcementRequest{
+		BypassPullRequestAllowancesRequest: nil,
+		DismissalRestrictionsRequest:       nil,
+		DismissStaleReviews:                true,
+		RequireCodeOwnerReviews:            false,
+		RequiredApprovingReviewCount:       1,
+	}
+	opts := githubApi.ProtectionRequest{
+		RequiredStatusChecks:           nil,
+		RequiredPullRequestReviews:     &pullRequest,
+		EnforceAdmins:                  false,
+		Restrictions:                   nil,
+		RequireLinearHistory:           nil,
+		AllowForcePushes:               nil,
+		AllowDeletions:                 nil,
+		RequiredConversationResolution: nil,
+	}
+	_, _, err := client.Repositories.UpdateBranchProtection(context.TODO(), repositoryPayload.Organization.Login, repositoryPayload.Repository.Name, repositoryPayload.Repository.DefaultBranch, &opts)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+func addDefaultWorkflows(client *githubApi.Client, repositoryPayload github.RepositoryPayload) error {
+	//TODO all of these should be read from some kind of config file. But for now lets hardcode them
+	// The workflowContent could probably be some kind of GitHub Struct. Maybe the library has a struct for it
+	// This is a point of discussion i guess
+	content, err := ioutil.ReadFile("workflow.yml")
+	if err != nil {
+		return err
+	}
+	filePath := ".github/workflows/sonarscan.yml"
+	message := "[skip ci] Added sonarscan workflow"
+	fileContent, _ := getFile(filePath, client)
+	var sha *string = nil
+	if fileContent != nil {
+		sha = fileContent.SHA
+	}
+	opts := githubApi.RepositoryContentFileOptions{
+		Message:   &message,
+		Content:   content,
+		SHA:       sha,
+		Branch:    nil,
+		Author:    nil,
+		Committer: nil,
+	}
+	repositoryContentResponse, _, err := client.Repositories.CreateFile(context.TODO(), repositoryPayload.Organization.Login, repositoryPayload.Repository.Name, filePath, &opts)
+	if err != nil {
+		// TODO: Proper error handling
+		return err
+	}
+	log.Info(fmt.Sprintf("Workflow %s/%s created in commit %s", repositoryPayload.Repository.FullName, filePath, *repositoryContentResponse.Commit.SHA))
 
 	return nil
 }
