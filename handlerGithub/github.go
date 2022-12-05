@@ -130,21 +130,26 @@ func convertToGithubRepositorySchema(repositoryPayload github.RepositoryPayload)
 			ReconsiledAt: time.Now().UTC().String(),
 		},
 	}
-
-	if os.Getenv("enable-sonarqube") == "true" { // we could check the token but i think thats the sonarqube libraries job
+	err = addDefaultBranchRules(client, repositoryPayload) //TODO should this be here ?
+	if err != nil {
+		return nil, err
+	}
+	if os.Getenv("enable-sonarqube") == "true" {
 		sonarQubeComponent, err2 := sonarqube.OnboardSonarQube(repositoryPayload)
 		if err2 != nil {
 			return nil, err2
 		}
-		err = createSonarQubeFile(repositoryPayload)
+		err = createSonarQubeFile(client, repositoryPayload)
 		if err != nil {
-			log.Warning(err)
+			return nil, err
+		}
+		err = addDefaultWorkflows(client, repositoryPayload) // TODO should this be here?
+		if err != nil {
 			return nil, err
 		}
 		githubRepository.Components.Sonarqube = *sonarQubeComponent
 
 	}
-
 
 	/*
 		For the components we could break it into a function that returns a components struct with all the components based on if they are enabled and some tests i guess.
@@ -309,16 +314,18 @@ func CreateSourceHook() {
 		//TODO fix error
 		return
 	}
-	log.Info(fmt.Sprintf("Hook response %s"), resp.Status)
-	log.Info(fmt.Sprintf("Hook %s created for %s"), hook.Name, repoAsCode)
+	log.Info(fmt.Sprintf("Hook response %s", resp.Status))
+	log.Info(fmt.Sprintf("Hook %s created for %s", *hook.Name, repoAsCode))
 
 }
 
-
-func createSonarQubeFile(client *githubApi.Client, repositoryPayload github.RepositoryPayload) { //TODO add error handling and pass client probably
+func createSonarQubeFile(client *githubApi.Client, repositoryPayload github.RepositoryPayload) error { //TODO add error handling and pass client probably
 	filePath := "sonar-project.properties"
 	message := "[skip ci] Added sonar-project.properties file"
-	fileContent, _ := getFile(filePath, client)
+	fileContent, _, err := getFile(filePath, client)
+	if err != nil {
+		return err
+	}
 	var sha *string = nil
 	if fileContent != nil {
 		sha = fileContent.SHA
@@ -377,7 +384,10 @@ func addDefaultWorkflows(client *githubApi.Client, repositoryPayload github.Repo
 	}
 	filePath := ".github/workflows/sonarscan.yml"
 	message := "[skip ci] Added sonarscan workflow"
-	fileContent, _ := getFile(filePath, client)
+	fileContent, _, err := getFile(filePath, client)
+	if err != nil {
+		return err
+	}
 	var sha *string = nil
 	if fileContent != nil {
 		sha = fileContent.SHA
@@ -392,7 +402,6 @@ func addDefaultWorkflows(client *githubApi.Client, repositoryPayload github.Repo
 	}
 	repositoryContentResponse, _, err := client.Repositories.CreateFile(context.TODO(), repositoryPayload.Organization.Login, repositoryPayload.Repository.Name, filePath, &opts)
 	if err != nil {
-		// TODO: Proper error handling
 		return err
 	}
 	log.Info(fmt.Sprintf("Workflow %s/%s created in commit %s", repositoryPayload.Repository.FullName, filePath, *repositoryContentResponse.Commit.SHA))
