@@ -266,6 +266,7 @@ func OnboardSonarQube(repositoryPayload github.RepositoryPayload) (*Sonarqube, e
 		log.Error(err)
 		return nil, err
 	}
+	// Considering this cannot be done with the 1. current scope because we need the common interface 2. It handles other parts of the process we might wanna break this out
 	search, err = SearchSonarQube(PortfolioQualifier, "devops") //TODO the parameters might need to be supplied in some other way as topics arent given at "birth"
 	if err != nil {
 		log.Error(err)
