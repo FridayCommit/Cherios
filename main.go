@@ -32,7 +32,10 @@ func init() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	handlerGithub.CreateSourceHook()
+	err = handlerGithub.CreateSourceHook()
+	if err != nil {
+		log.Fatalln(err)
+	}
 }
 
 func ParseRenameChangeHook(r *http.Request) (handlerGithub.RenameChangesPayload, error) {
