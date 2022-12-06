@@ -9,7 +9,6 @@ import (
 	"github.com/go-playground/webhooks/v6/github"
 	githubApi "github.com/google/go-github/v48/github"
 	log "github.com/sirupsen/logrus"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -281,7 +280,7 @@ func HandleRepositoryEvent(repositoryPayload github.RepositoryPayload, renameCha
 
 // CreateSourceHook Creates a hook to the source of truth repo so that we can see changes to files. Can be ran on init
 // This function currently functions as Init for the modules function
-func CreateSourceHook() {
+func CreateSourceHook() error {
 	//Set used globals
 	repoAsCodeOrg = os.Getenv("repoAsCodeOrg")
 	repoAsCodeRepository = os.Getenv("repoAsCodeRepository")
@@ -312,11 +311,12 @@ func CreateSourceHook() {
 	hook, resp, err := client.Repositories.CreateHook(context.TODO(), repoAsCodeOrg, repoAsCodeRepository, &opts)
 	if err != nil {
 		//TODO fix error
-		return
+		return err
 	}
 	log.Info(fmt.Sprintf("Hook response %s", resp.Status))
 	log.Info(fmt.Sprintf("Hook %s created for %s", *hook.Name, repoAsCode))
 
+	return nil
 }
 
 func createSonarQubeFile(client *githubApi.Client, repositoryPayload github.RepositoryPayload) error { //TODO add error handling and pass client probably
@@ -378,7 +378,7 @@ func addDefaultWorkflows(client *githubApi.Client, repositoryPayload github.Repo
 	//TODO all of these should be read from some kind of config file. But for now lets hardcode them
 	// The workflowContent could probably be some kind of GitHub Struct. Maybe the library has a struct for it
 	// This is a point of discussion i guess
-	content, err := ioutil.ReadFile("workflow.yml")
+	content, err := os.ReadFile("workflow.yml")
 	if err != nil {
 		return err
 	}
